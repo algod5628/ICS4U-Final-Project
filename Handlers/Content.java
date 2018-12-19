@@ -14,8 +14,9 @@ import javax.imageio.ImageIO;
 
 public class Content {
 	
-	public static BufferedImage[][] Slugger = load("/Sprites/Enemies/Slugger.gif", 30, 30);
-	public static BufferedImage[][] Explosion = load("/Sprites/Enemies/explosion.gif", 30, 30);
+	public static BufferedImage[][] Slime = load("/Sprites/Enemies/slime-Sheet.png", 32, 25);
+	public static BufferedImage[][] Explosion = load("/Sprites/Enemies/ExplosionAVBb.png", 30, 30);
+        public static BufferedImage[][] Arrow = load("/Sprites/Player/EnergyArrowAVB.png",30,30);
 	
         /**
          * Loads the given sprite-sheet with the specified number of rows and columns 

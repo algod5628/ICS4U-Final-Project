@@ -4,6 +4,7 @@ package Entity;
 
 import TileMap.*;
 import Audio.AudioPlayer;
+import Main.GamePanel;
 
 import java.util.HashMap;
 import javax.imageio.ImageIO;
@@ -11,65 +12,87 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 
-
 /**
  *
  * @author Family
  */
 public class Player extends MapObject {
-    
+
     //player attributes
-    private int health;
-    private int maxHealth;
+    private double health;
+    private double maxHealth;
     private int ammo;
     private int maxAmmo;
     private boolean dead;
+    private boolean hasStrongShot;
+    private long shotDelay;
     private boolean flinching;
     private long flinchTime;
 
     //ranged attack
-    private boolean rangedAttacking;
+    private boolean sRangedAttacking;
     private int ammoCost;
-    private int ammoDamage;
-   // private ArrayList<FireBall> fireBalls;
+    private int rangedDamage;
+    private ArrayList<Arrow> arrows;
 
     //melee/close-ranged attack
     private boolean meleeAttacking;
-    private int meleeDamage;
-    private int meleeRange;
+    private int meleeDamageL;
+    private int meleeRangeL;
+    private int meleeDamageM; //IMPLEMENT
+    private int meleeRangeM;
+    private int meleeDamageH;
+    private int meleeRangeH;
 
-    //gliding
+    //other actions
     private boolean gliding;
+    private boolean flashstepping;
+    private boolean isDying = false;
 
     //animations
     private ArrayList<BufferedImage[]> sprites;
     private final int[] numFrames = {
         4, //idle
+        4,//crouching
         6, //running 
         8, //jumping
         2, //falling
-        5, //gliding
+        2, //gliding
+        9,//hanging (climbing from ledge)
+        4,//attackIdle
+        7,//mMelee
+        6,//hMelee
+        6, //lMelee
+        10,//dying
+        20,//flashstep
         9, //ranged
-        6 //melee
+        6//rangedQ
     };
 
     // animation actions
     private static final int IDLE = 0;
-    private static final int RUNNING = 1;
-    private static final int JUMPING = 2;
-    private static final int FALLING = 3;
-    private static final int GLIDING = 4;
-    private static final int RANGED = 5;
-    private static final int MELEE = 6;
+    private static final int CROUCHING = 1; //NOT USING
+    private static final int RUNNING = 2;
+    private static final int JUMPING = 3;
+    private static final int FALLING = 4;
+    private static final int GLIDING = 5;
+    private static final int HANGING = 6; //NOT USING
+    private static final int ATTACKIDLE = 7; //NOT USING
+    private static final int MMELEE = 8;
+    private static final int HMELEE = 9;
+    private static final int LMELEE = 10;
+    private static final int DYING = 11;
+    private static final int FLASHSTEP = 12;
+    private static final int RANGEDSTRONG = 13;
+    private static final int RANGEDQ = 14;
 
-    
     //Constructor
     public Player(TileMap tm) {
         super(tm);
 
         width = 50;
         height = 37;
-        cwidth = 25;
+        cwidth = 23;
         cheight = 30;
 
         moveSpeed = 0.4;
@@ -81,198 +104,83 @@ public class Player extends MapObject {
         stopJumpSpeed = 0.3;
 
         facingRight = true;
+        hasStrongShot = false;
 
-        maxHealth = 5;
+        maxHealth = 30.0;
         health = maxHealth;
-        maxAmmo = 2500;
+        maxAmmo = 5000;
         ammo = maxAmmo;
 
-        ammoCost = 200;
-        ammoDamage = 5;
-      //  fireBalls = new ArrayList<FireBall>();
+        ammoCost = 1000;
+        rangedDamage = 8;
+        arrows = new ArrayList<Arrow>();
 
-        meleeDamage = 8;
-        meleeRange = 40;
+        meleeDamageL = 2;
+        meleeRangeL = 40;
 
         //load sprites
         loadSprites();
-        /*try {
-            BufferedImage mainSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurer-Sheet.png"));
-            BufferedImage bowSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurer-bow-Sheet.png"));
-            BufferedImage attack = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerAttack.png"));
-            sprites = new ArrayList<BufferedImage[]>();
-
-            // 7 animation actions
-            for (int i = 0; i < 7; i++) {
-                BufferedImage[] bi = new BufferedImage[numFrames[i]];
-                for (int j = 0; j < numFrames[i]; j++) {
-
-                    if (i != 6) { //scratching animation has a larger width (60 pixel width compared to 30 pixels)
-                        bi[j] = spritesheet.getSubimage(j * width, i * height, width, height);
-                    } else {
-                        bi[j] = spritesheet.getSubimage(j * width * 2, i * height, width * 2, height);
-                    }
-                }
-
-                sprites.add(bi);
-
-            } // end loop for loading in a sprite animation set
-        } catch (Exception e) {
-            e.printStackTrace();
-        }*/
-
+       
         animation = new Animation();
         currentAction = IDLE;
         animation.setFrames(sprites.get(IDLE));
         animation.setDelay(400);
-        
+
         //set-up sound effects
-        AudioPlayer.load("/Sound FX/NFF-jump.wav", "jump");
-        AudioPlayer.decreaseVolume("jump", -50.0f);
+        //jump
+        AudioPlayer.load("/Sound FX/Bounce.wav", "jump");
+        AudioPlayer.decreaseVolume("jump", -20.0f);
+        //quick shot
+        //strong shot
+        AudioPlayer.load("/Sound FX/FlameArrow.wav", "strong");
+        AudioPlayer.decreaseVolume("strong", -20.0f);
         /*
         sfx = new HashMap<String, AudioPlayer>();
         sfx.put("jump", new AudioPlayer("/Sound FX/NFF-jump.wav"));
         sfx.get("jump").decreaseVolume(-50.0f); */
-        
+
     }
 
     public void loadSprites() {
         //load sprites
         try {
-            BufferedImage mainSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurer-Sheet.png"));
-            BufferedImage bowSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurer-bow-Sheet.png"));
-            //BufferedImage idle = mainSpritesheet.getSubimage(0, 0, 4 * width, height);
-            BufferedImage attack = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerAttack.png"));
 
-            
+            BufferedImage mainSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/AdventurerAVBFinal.png"));
+            BufferedImage bowSpritesheet = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/BowFinal.png"));
+
             sprites = new ArrayList<BufferedImage[]>();
 
-            //create 2D array to hold all images
-            BufferedImage[][] playerSprites = new BufferedImage[11][7]; //11 x 7
-
             //MAIN
-            //Fill 2D array with images
-            //11 rows
-            for (int i = 0; i < 11; i++) {
-                //7 columns
-                for (int j = 0; j < 7; j++) {
-                    if (i < 11 && j < 2) {
-                        playerSprites[i][j] = mainSpritesheet.getSubimage(j * width, i * height, width, height);
-                    } else {
-                        break;
-                    }
+            //Fill array list with BufferedImage arrays of images, for animation
+            //13 rows
+            for (int i = 0; i < 13; i++) {
+                //20 columns - but only for the needed number of frames for each animation
+                //create a 2D array to hold all animation images
+                BufferedImage[] playerSprites = new BufferedImage[numFrames[i]];
+                for (int j = 0; j < numFrames[i]; j++) {
+                    playerSprites[j] = mainSpritesheet.getSubimage(j * width, i * height, width, height);
                 }
+                sprites.add(playerSprites); //add to array list of player animation
+            }
+            //BOW //Same as above, but with the seperate bow spritesheet
+            for (int i = 0; i < 2; i++) {
+                BufferedImage[] bowSprites = new BufferedImage[numFrames[i + RANGEDSTRONG]];
+                for (int j = 0; j < numFrames[i + RANGEDSTRONG]; j++) {
+                    bowSprites[j] = bowSpritesheet.getSubimage(j * width, i * height, width, height);
+                }
+                sprites.add(bowSprites);
             }
 
-            //create 2D array to hold all images
-            BufferedImage[] groundBowSprites = new BufferedImage[numFrames[RANGED]];
-            BufferedImage[] airBowSprites =  new BufferedImage[6];
-
-            
-            //BOW
-            spriteArrayOneLine(bowSpritesheet.getSubimage(0, 0, 9 * width, height), groundBowSprites, numFrames[RANGED]);
-               /*for (int x = 0; x < 9; x++) {
-                    groundBowSprites[x] = bowSpritesheet.getSubimage(x * width, 0, width, height);
-                }*/
-            
-
-            /*
-            //4 rows
-            for (int i = 0; i < 4; i++) {
-                //4 columns
-                for (int j = 0; j < 4; j++) {
-                    if (i == 3 && j < 2){
-                        bowSprites[i][j] = bowSpritesheet.getSubimage(j * width, i * height, width, height);
-                    } else {
-                        break;
-                    }
-                }
-            }*/
-             
-            //Separate the different actions into 1D arrays and add to the spritesheet ArrayList
-            //-----------------------MAIN --------------------------------------------
-           
-            BufferedImage[] array;
-             BufferedImage image;
-             
-            //IDLE
-            array = new BufferedImage[numFrames[IDLE]];
-            image = mainSpritesheet.getSubimage(0, 0, 4 * width, height);
-            spriteArrayOneLine(image, array, numFrames[IDLE]);
-            sprites.add(array);
-            /*BufferedImage[] array = new BufferedImage[numFrames[IDLE]];
-            makeSpriteArray(playerSprites, array, 0, 0);
-            sprites.add(array); */
-            //RUN 
-            array = new BufferedImage[numFrames[RUNNING]];
-            image = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerRun.png"));
-            spriteArrayOneLine(image, array, numFrames[RUNNING]);
-            sprites.add(array);
-            //JUMP
-            array = new BufferedImage[numFrames[JUMPING]];
-            image = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerJump.png"));
-            spriteArrayOneLine(image, array, numFrames[JUMPING]);
-            sprites.add(array);
-            //FALL
-            array = new BufferedImage[numFrames[FALLING]];
-            image = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerSlideAndFall.png"));
-            image = image.getSubimage(0, height, numFrames[FALLING] * width, height);
-            spriteArrayOneLine(image, array, numFrames[FALLING]);
-            sprites.add(array);
-            //GLIDE
-            array = new BufferedImage[numFrames[GLIDING]];
-            image = ImageIO.read(getClass().getResourceAsStream("/Sprites/Player/adventurerSlideAndFall.png"));
-            image = image.getSubimage(0, 0, numFrames[GLIDING] * width, height);
-            spriteArrayOneLine(image, array, numFrames[GLIDING]);
-            sprites.add(array);
-            //RANGED
-         /*   array = new BufferedImage[numFrames[RANGED]];
-            makeSpriteArray(bowSprites, array, 0, 0, 4); 
-            sprites.add(array); */
-         sprites.add(groundBowSprites);
-            //MELEE
-            array = new BufferedImage[numFrames[MELEE]];
-            spriteArrayOneLine(attack, array, numFrames[MELEE]);
-            sprites.add(array);
-            
-            /*
-            array = new BufferedImage[numFrames[MELEE]];
-            makeSpriteArray(playerSprites, array, 7, 4);
-            sprites.add(array);
-            
-            /*
-            // 7 animation actions
-            for (int i = 0; i < 7; i++) {
-                BufferedImage[] bi = new BufferedImage[numFrames[i]];
-                for (int j = 0; j < numFrames[i]; j++) {
-
-                    if (i != 6) { //scratching animation has a larger width (60 pixel width compared to 30 pixels)
-                        bi[j] = spritesheet.getSubimage(j * width, i * height, width, height);
-                    } else {
-                        bi[j] = spritesheet.getSubimage(j * width * 2, i * height, width * 2, height);
-                    }
-                }
-
-                sprites.add(bi);
-
-            } // end loop for loading in a sprite animation set
-             */
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-    
-     public void spriteArrayOneLine(BufferedImage sourceImage, BufferedImage[] array, int numFrames){
-        for (int x = 0; x < numFrames; x++) {
-                    array[x] = sourceImage.getSubimage(x * width, 0, width, height);
-                }
-    }
-    
-    public int getHealth() {
+
+    public double getHealth() {
         return health;
     }
 
-    public int getMaxHealth() {
+    public double getMaxHealth() {
         return maxHealth;
     }
 
@@ -285,18 +193,45 @@ public class Player extends MapObject {
     }
 
     public void setRangedAttacking() {
-        rangedAttacking = true;
+        sRangedAttacking = true;
+    }
+    public boolean getRangedAttacking() {
+        return sRangedAttacking;
     }
 
     public void setMeleeAttacking() {
         meleeAttacking = true;
+    }
+    public boolean getMeleeAttacking() {
+        return meleeAttacking;
+    }
+    
+    public boolean getIsAttacking(){
+        return meleeAttacking ^ sRangedAttacking;  
     }
 
     public void setGliding(boolean b) {
         gliding = b;
     }
 
-    /*
+    public void setFlashstepping() {
+        flashstepping = true;
+    }
+    
+    public boolean isDead(){
+        return dead;
+    }
+    
+    public void respawn(){
+        health = maxHealth;
+        ammo = maxAmmo;
+        currentAction = IDLE;
+        dead = false;
+        x = 100;
+        y = 100;
+        //fix jumping while dead
+    }
+
     public void checkAttack(ArrayList<Enemy> enemies) {
 
         //loop through enemies
@@ -307,96 +242,127 @@ public class Player extends MapObject {
             //check melee attack
             if (meleeAttacking) {
                 if (facingRight) {
-                    if (e.getx() > x
-                            && //Makes sure enemy is in front of the player when facing right
-                            e.getx() < x + meleeRange
+                    if (e.getx() > x //Makes sure enemy is in front of the player when facing right
+                            && e.getx() < x + meleeRangeL
                             && e.gety() > y - height / 2
                             && e.gety() < y + height / 2) {
-                        e.hit(meleeDamage);
+                        e.hit(meleeDamageL);
                     }
                 } else {
-                    if (e.getx() < x
-                            && //Makes sure enemy is in front of the player when facing left
-                            e.getx() > x - meleeRange
+                    if (e.getx() < x //Makes sure enemy is in front of the player when facing left
+                            && e.getx() > x - meleeRangeL
                             && e.gety() > y - height / 2
                             && e.gety() < y + height / 2) {
-                        e.hit(meleeDamage);
+                        e.hit(meleeDamageL);
                     }
                 }
             }//end meleeAttacking if
 
             //Projectiles
-            for (int j = 0; j < fireBalls.size(); j++) { //loop through fireballs
-                if (fireBalls.get(j).intersects(e)) { //if it hits the enemy
-                    e.hit(ammoDamage); //causes damage to the enemy
-                    fireBalls.get(j).setHit(); //specifies that fireball has hit something
+            for (int j = 0; j < arrows.size(); j++) { //loop through arrows
+                if (arrows.get(j).intersects(e)) { //if it hits the enemy
+                    e.hit(rangedDamage); //causes damage to the enemy
+                    arrows.get(j).setHit(); //specifies that arrow has hit something
                     break; //end whole loop if enemy has been hit
                 }
             }
-            
+
             //check enemy collision
-            if(intersects(e)){
+            if (intersects(e)) {
                 hit(e.getDamage());
             }
-            
+
         }//End enemy search loop
 
-        
-    }*/
+    }
 
-    public void hit(int damage){
-        if(flinching){
+    public void hit(int damage) {
+        if (flinching || flashstepping || dead) { //can't be damaged while flinching or flashstepping
             return;
         }
-        
+
         health -= damage;
-        if(health < 0){
+        if (health < 0) {
             health = 0;
         }
-        if(health == 0){
+        if (health == 0) {
             dead = true;
         }
+        if (!dead){
         flinching = true;
         flinchTime = System.nanoTime();
+        }
     }
-    
+
     private void getNextPosition() {
 
+        if (flashstepping) {
+            maxSpeed = 6.0;
+            moveSpeed = 0.8;
+            fallSpeed = 0.05;
+            maxFallSpeed = 2.0;
+            jumpStart = 0;
+        } else if(gliding) {
+            maxSpeed = 3.0;
+        } else {
+            maxSpeed = 2.3;
+            moveSpeed = 0.4;
+            fallSpeed = 0.15;
+            maxFallSpeed = 4.0;
+            jumpStart = -4.8;
+        }
+
         //movement
-        if (left) {
+        if (left && !dead) {
             dx -= moveSpeed; //speeds up
             if (dx < -maxSpeed) { //limits the max speed of the player
                 dx = -maxSpeed;
             }
-        } else if (right) {
+
+        } else if (right && !dead) {
             dx += moveSpeed; //speeds up
             if (dx > maxSpeed) { //limits the max speed of the player
                 dx = maxSpeed;
             }
+
         } else { //stopped/not moving
-            if (dx > 0) {
-                dx -= stopSpeed; //slows down
-                if (dx < 0) { //complete stop
-                    dx = 0;
+            if (flashstepping) {
+                if (facingRight) {
+                    dx = 4.0;
+                } else {
+                    dx = -4.0;
                 }
-            } else if (dx < 0) {
-                dx += stopSpeed; //slows down
-                if (dx > 0) { //complete stop
-                    dx = 0;
+            } else {
+                if (dx > 0) {
+                    dx -= stopSpeed; //slows down
+                    if (dx < 0) { //complete stop
+                        dx = 0;
+                    }
+                } else if (dx < 0) {
+                    dx += stopSpeed; //slows down
+                    if (dx > 0) { //complete stop
+                        dx = 0;
+                    }
                 }
             }
         }
 
         //cannot attack while moving (but still in the air)
-        if ((currentAction == MELEE || currentAction == RANGED) && !(jumping || falling)) {
+        if ((currentAction == MMELEE || 
+                currentAction == HMELEE || 
+                currentAction == RANGEDSTRONG ||
+                currentAction == DYING) && !(jumping || falling)) {
             dx = 0;
         }
 
         //jumping
         if (jumping && !falling) {
-            AudioPlayer.play("jump");
-            dy = jumpStart;
+            if (!flashstepping && !dead) {
+                AudioPlayer.play("jump");
+                dy = jumpStart;
             falling = true;
+            }
+            
         }
 
         //falling
@@ -424,85 +390,138 @@ public class Player extends MapObject {
     }
 
     public void update() {
-
+        
         //update position
         getNextPosition();
         checkTileMapCollision();
         setPosition(xtemp, ytemp);
-
-        //check attack has stopped
-        if (currentAction == MELEE) {
+        
+        //check action has stopped
+        if (currentAction == LMELEE) {
             if (animation.hasPlayedOnce()) {
                 meleeAttacking = false;
             }
-        } else if (currentAction == RANGED) {
+        } else if (currentAction == RANGEDSTRONG) {
             if (animation.hasPlayedOnce()) {
-                rangedAttacking = false;
+                sRangedAttacking = false;
+            }
+        } else if (currentAction == FLASHSTEP) {
+            if (animation.hasPlayedOnce()) {
+                flashstepping = false;
+            }
+        } else if (currentAction == DYING){
+            if (animation.hasPlayedOnce()){
+                isDying = false;
+                dead = true;
+                health = maxHealth;
             }
         }
 
-        //fireball attack
-        ammo += 1; //constantly regenerates the ammo
+        //shoot an arrow
+        ammo += 2; //constantly regenerates the ammo
+       if (!dead) health += 0.01; //constantly regenerates health
         if (ammo > maxAmmo) { //limits it to the specified max ammo
             ammo = maxAmmo;
         }
-        if (rangedAttacking && currentAction != RANGED) {
-            //Creates a fireball entity, and specifies direction based on where player is facing
+        if (health > maxHealth){ //limits it to maximum health
+            health = maxHealth;
+        }
+        if (sRangedAttacking && currentAction != RANGEDSTRONG && !hasStrongShot) {
+            //Creates an arrow entity, and specifies direction based on where player is facing
             //Only if sufficient ammo is present
             if (ammo > ammoCost) {
                 ammo -= ammoCost; //subtracts the ammo used to  attack
-                //FireBall fb = new FireBall(tileMap, facingRight);
-                //fb.setPosition(x, y); //sets it to the same position as player
-               // fireBalls.add(fb);
+                hasStrongShot = true;
+                shotDelay = System.nanoTime();
+            }
+        }
+        if (hasStrongShot) {
+            long elapsed = (System.nanoTime() - shotDelay) / 1000000;
+            if (elapsed > 93 * numFrames[RANGEDSTRONG]) {
+                Arrow ar = new Arrow(tileMap, facingRight);
+                ar.setPosition(x, y + 3); //sets it to the same position as player
+                arrows.add(ar);
+                hasStrongShot = false;
+                //plays sound effect
+                AudioPlayer.play("strong");
             }
         }
 
-        //update fireballs
-        /*
-        for (int i = 0; i < fireBalls.size(); i++) {
-            fireBalls.get(i).update();
-            if (fireBalls.get(i).shouldRemove()) { //removes from game if it hits
+        //update arrows
+        for (int i = 0; i < arrows.size(); i++) {
+            arrows.get(i).update();
+            if (arrows.get(i).shouldRemove()) { //removes from game if it hits
                 //remove from array list and reduce the index to make sure all items in the array list are updated
-                fireBalls.remove(i);
+                arrows.remove(i);
                 i--;
             }
-        }*/
-        
+        }
+
         //check if done flinching
-        if (flinching){
+        if (flinching) {
             long elapsed = (System.nanoTime() - flinchTime) / 1000000;
-            if (elapsed > 1000){ //stops flinching after one second
+            if (elapsed > 1000) { //stops flinching after one second
                 flinching = false;
             }
         }
 
+         //check if player's health has reached 0
+        if (dead && health == 0){
+                isDying = true;
+                meleeAttacking = false;
+                sRangedAttacking = false;
+                flashstepping = false;
+                dx = 0;
+                dy = 0;
+        }
+        
+        if (!isDying && dead && health > 0){ //they have finished dying
+            animation.setFrame(9);
+            return;
+        }
+        
         // set animation
         if (meleeAttacking) {
-
-            if (currentAction != MELEE) {
-                currentAction = MELEE;
-                animation.setFrames(sprites.get(MELEE));
+            sRangedAttacking = false;
+            flashstepping = false;
+            dx *= 0.8; //makes them move 20% slower
+            if (currentAction != LMELEE) {
+                currentAction = LMELEE;
+                animation.setFrames(sprites.get(LMELEE));
                 animation.setDelay(50);
                 //REMOVE width = 60;
             }
 
-        } else if (rangedAttacking) {
+        } else if (sRangedAttacking) {
 
-            if (currentAction != RANGED) {
-                currentAction = RANGED;
-                animation.setFrames(sprites.get(RANGED));
+            if (currentAction != RANGEDSTRONG) {
+                currentAction = RANGEDSTRONG;
+                animation.setFrames(sprites.get(RANGEDSTRONG));
                 animation.setDelay(100);
                 //width = 30;
             }
 
-        } else if (dy > 0) {
+        } else if (flashstepping) {
+            if (currentAction != FLASHSTEP) {
+                currentAction = FLASHSTEP;
+                animation.setFrames(sprites.get(FLASHSTEP));
+                animation.setDelay(15);
+            }
+
+        } else if (isDying) {
+            if (currentAction != DYING){
+                currentAction = DYING;
+                animation.setFrames(sprites.get(DYING));
+                animation.setDelay(375);
+            }
+        }else if (dy > 0) {
 
             if (gliding) {
                 if (currentAction != GLIDING) {
                     currentAction = GLIDING;
                     animation.setFrames(sprites.get(GLIDING));
                     animation.setDelay(100);
-                   // width = 30;
+                    // width = 30;
                 }
             } else if (currentAction != FALLING) {
                 currentAction = FALLING;
@@ -544,7 +563,9 @@ public class Player extends MapObject {
         animation.update();
 
         //set direction
-        if (currentAction != MELEE && currentAction != RANGED) { //makes sure the player isn't moving while attacking
+        if (currentAction != LMELEE &&
+                currentAction != RANGEDSTRONG &&
+                currentAction != DYING) { //makes sure the player isn't turning while attacking
             if (right) {
                 facingRight = true;
             }
@@ -561,26 +582,37 @@ public class Player extends MapObject {
 
         setMapPosition();
 
-        //draw fireballs
-        /*
-        for (int i = 0; i < fireBalls.size(); i++) {
-            fireBalls.get(i).draw(g);
-        }*/
+        //draw arrows
+        for (int i = 0; i < arrows.size(); i++) {
+            arrows.get(i).draw(g);
+        }
 
         //draw player
         if (flinching) {
             long elapsed = (System.nanoTime() - flinchTime) / 1000000;
-            if (elapsed / 100 % 2 == 0) {
+            if (elapsed / 10 % 2 == 0) {
                 return; //doesn't draw the player (flashing effect when hit) - every 100 milliseconds
             }
         }
 
-        if (facingRight) {
+        if (dead && !isDying && health == maxHealth){
+            System.out.println("DEAD");
+            Font font = new Font("Century Gothic", Font.BOLD, 20);
+            g.setFont(font);
+            g.setColor(Color.DARK_GRAY);
+            g.drawString("Press ENTER to Respawn", (int)(GamePanel.WIDTH / 2) - 115, (int)(GamePanel.HEIGHT / 2) + 10);
+            g.drawString("Press ENTER to Respawn", (int)(GamePanel.WIDTH / 2) - 115, (int)(GamePanel.HEIGHT / 2) + 9);
+            g.setColor(Color.WHITE);
+            g.setFont(font);
+            g.drawString("Press ENTER to Respawn", (int)(GamePanel.WIDTH / 2) - 113, (int)(GamePanel.HEIGHT / 2) + 10);
+        }
+        
+        /*if (facingRight) {
             g.drawImage(animation.getImage(), (int) (x + xmap - width / 2), (int) (y + ymap - height / 2), null);
         } else { //facing left - flips the image because it is only facing right (-width)
             g.drawImage(animation.getImage(), (int) (x + xmap - width / 2 + width), (int) (y + ymap - height / 2), -width, height, null);
-        }
-       //REMOVE super.draw(g);
+        }*/
+        super.draw(g);
     }
 
 }
